@@ -9,6 +9,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [language, setLanguage] = useState('bangla');
 
+  // 🌍 Global Production URL Sync
+  // In development, this will be empty (using Vite proxy)
+  // In production, you will set VITE_API_URL in Netlify
+  const API_URL = 'https://physics-backend-v2.onrender.com';
+  axios.defaults.baseURL = API_URL;
+
   // Configure axios defaults
   if (token) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
