@@ -12,7 +12,7 @@ export const AuthProvider = ({ children }) => {
   // 🌍 Global Production URL Sync
   // In development, this will be empty (using Vite proxy)
   // In production, you will set VITE_API_URL in Netlify
-  const API_URL = 'https://physics-backend-v2.onrender.com';
+  const API_URL = 'https://physics-backend-xpv1.onrender.com';
   axios.defaults.baseURL = API_URL;
 
   // Configure axios defaults
