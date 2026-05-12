@@ -1,35 +1,31 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Zap, Trophy, Book, Star, Activity, ChevronRight, 
+  ArrowRight, LayoutGrid, Clock, Target, TrendingUp,
+  Cpu, Users, Award, BookOpen, Search, ArrowLeft, BookCheck
+} from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { 
-  BookOpen, CheckCircle2, ChevronRight, Sparkles, TrendingUp, 
-  Activity, Zap, Clock, Star, LayoutGrid, Calendar, ArrowRight,
-  ArrowLeft, Book
-} from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 
 const Dashboard = () => {
+  const { user, language } = useAuth();
+  const navigate = useNavigate();
   const [chapters, setChapters] = useState([]);
-  const [topics, setTopics] = useState([]);
-  const [progress, setProgress] = useState({ progress: [], user: {}, chapterStats: {} });
+  const [progress, setProgress] = useState({ chapterStats: {}, progress: [] });
   const [loading, setLoading] = useState(true);
-  const { language, user } = useAuth();
   const [selectedClass, setSelectedClass] = useState(9);
-  const [searchParams] = useSearchParams();
-  const activeChapter = searchParams.get('chapter');
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
       try {
-        const [chapRes, topRes, progRes] = await Promise.all([
+        setLoading(true);
+        const [chapRes, progRes] = await Promise.all([
           axios.get(`/api/topics/chapters?class=${selectedClass}`),
-          axios.get(`/api/topics?class=${selectedClass}`),
           axios.get('/api/progress/user')
         ]);
-        setChapters(chapRes.data.chapters);
-        setTopics(topRes.data.topics);
+        setChapters(chapRes.data.chapters || []);
         setProgress(progRes.data);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
@@ -40,250 +36,222 @@ const Dashboard = () => {
     fetchData();
   }, [selectedClass]);
 
-  // Derived Activity Data
-  const recentActivity = progress.progress
-    ?.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-    .slice(0, 4) || [];
-
-  const masteredCount = progress.progress?.filter(p => p.status === 'mastered').length || 0;
-  const totalTopicsCount = topics.length || 1;
-  const overallPercent = Math.round((masteredCount / totalTopicsCount) * 100);
-
   if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
-      <div className="loading loading-infinity text-primary loading-lg w-24 h-24"></div>
-      <p className="text-secondary font-black tracking-[0.4em] uppercase text-xs animate-pulse italic">Synchronizing Neural Data</p>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+      <div className="loading loading-ring loading-lg text-primary"></div>
+      <p className="text-[10px] font-black uppercase tracking-[0.5em] opacity-20 animate-pulse">Initializing Physics Nexus...</p>
     </div>
   );
 
+  const lastLesson = progress.progress?.[0] || null;
+  const currentTopicName = lastLesson ? 
+    (language === 'bangla' ? lastLesson.topicId?.topic?.bangla : lastLesson.topicId?.topic?.english) : 
+    (language === 'bangla' ? 'নতুন পাঠ শুরু করুন' : 'Begin Your Journey');
+
   return (
-    <div className="space-y-12 pb-20 font-outfit">
-      {/* 🚀 Cinematic Header */}
-      <section className="flex flex-col lg:flex-row gap-10 items-start lg:items-center justify-between p-12 lg:p-16 bg-gradient-to-br from-slate-900 to-black rounded-[4rem] border border-white/5 relative overflow-hidden shadow-3xl">
-        <div className="space-y-6 relative z-10 max-w-2xl">
-           <div className="flex items-center gap-3">
-              <span className="badge badge-primary font-black uppercase tracking-widest text-[9px] px-4 py-3">SSC Physics Hub v6.1</span>
-              <div className="h-0.5 w-10 bg-white/10" />
-           </div>
-           <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter leading-none text-white">
-              Neural <span className="text-primary italic underline decoration-white/5 underline-offset-8">Terminal.</span>
-           </h1>
-           <p className="text-xl font-medium text-slate-400 italic">
-              Welcome back, <span className="text-white">{user?.name}</span>. Your current neural synchronization is at <span className="text-primary">{overallPercent}%</span> across the Class {selectedClass} syllabus.
-           </p>
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-6 relative z-10">
-           {[9, 10].map(c => (
-              <button
-                key={c}
-                onClick={() => setSelectedClass(c)}
-                className={`btn btn-lg h-24 w-32 md:w-40 rounded-[2.5rem] border-none transition-all duration-500 font-black italic shadow-2xl ${
-                  selectedClass === c ? 'btn-primary shadow-primary/30 scale-105' : 'bg-white/5 text-slate-500 hover:bg-white/10'
-                }`}
-              >
-                Class {c}
-              </button>
-           ))}
-        </div>
-        
-        <Sparkles className="absolute top-[-10%] right-[-5%] w-64 h-64 text-primary opacity-5 rotate-12" />
-      </section>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* 📚 Module Library Section */}
-        <div className="lg:col-span-2 space-y-10">
-           <AnimatePresence mode="wait">
-            {!activeChapter ? (
-              /* --- CHAPTERS LIST VIEW --- */
-              <motion.div 
-                key="chapters"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="space-y-10"
-              >
-                <div className="flex items-center justify-between px-6">
-                  <div className="flex items-center gap-4">
-                    <LayoutGrid className="w-6 h-6 text-primary" />
-                    <h2 className="text-2xl font-black italic tracking-tight text-white uppercase">Module Library</h2>
-                  </div>
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-30 italic">{chapters.length} Chapters Active</p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-8">
-                  {chapters.map((chapter) => {
-                    const stats = progress.chapterStats[chapter._id] || { total: chapter.topicCount, completed: 0, mastered: 0 };
-                    const percent = Math.round((stats.mastered / (chapter.topicCount || 1)) * 100);
-
-                    return (
-                      <motion.div 
-                        key={chapter._id}
-                        whileHover={{ x: 10 }}
-                        className="card bg-slate-900/40 border border-white/5 rounded-[3rem] overflow-hidden group hover:border-primary/20 transition-all duration-500"
-                      >
-                        <div className="card-body p-10 flex-col md:flex-row gap-10 items-center justify-between">
-                          <div className="flex items-center gap-8 flex-1">
-                              <div className="w-20 h-20 rounded-[2rem] bg-white/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-content transition-all duration-500 shrink-0">
-                                <span className="text-3xl font-black italic text-inherit">{chapter._id}</span>
-                              </div>
-                              <div>
-                                <h3 className={`text-3xl font-black tracking-tight mb-2 text-white ${language === 'bangla' ? 'bn' : 'italic'}`}>
-                                  {language === 'bangla' ? chapter.chapterName.bangla : chapter.chapterName.english}
-                                </h3>
-                                <div className="flex gap-4">
-                                    <span className="badge badge-outline border-white/10 text-[9px] font-black uppercase tracking-widest py-3 opacity-40">{chapter.topicCount} Topics</span>
-                                    {percent === 100 && <span className="badge badge-success font-black text-[9px] uppercase tracking-widest py-3 italic">Synced</span>}
-                                </div>
-                              </div>
-                          </div>
-
-                          <div className="flex items-center gap-10">
-                              <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 mb-2 italic">Mastery</span>
-                                <div className="radial-progress text-primary font-black" style={{"--value": percent, "--size": "5rem", "--thickness": "4px"}} role="progressbar">
-                                    {percent}%
-                                </div>
-                              </div>
-                              <Link to={`/dashboard?chapter=${chapter._id}`} className="btn btn-circle btn-ghost border border-white/5 hover:bg-primary hover:text-primary-content transition-all">
-                                <ChevronRight className="w-6 h-6" />
-                              </Link>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            ) : (
-              /* --- TOPICS LIST VIEW --- */
-              <motion.div 
-                key="topics"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-10"
-              >
-                <div className="flex items-center justify-between px-6">
-                  <Link to="/dashboard" className="btn btn-ghost gap-4 rounded-2xl group border border-white/5">
-                    <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-xs font-black uppercase tracking-widest italic">Back to Maps</span>
-                  </Link>
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-30 italic">Chapter {activeChapter} Module Feed</p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6">
-                  {topics.filter(t => t.chapter?.number === parseInt(activeChapter)).map((topic) => {
-                    const prog = progress.progress?.find(p => p.topicId?._id === topic._id || p.topicId === topic._id);
-                    const isMastered = prog?.status === 'mastered';
-                    
-                    return (
-                      <Link 
-                        key={topic._id} 
-                        to={`/topic/${topic._id}`}
-                        className="card bg-slate-900/40 border border-white/5 rounded-[2.5rem] hover:bg-slate-900 transition-all p-8 flex flex-row items-center justify-between group"
-                      >
-                         <div className="flex items-center gap-6">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isMastered ? 'bg-emerald-500/10 text-emerald-500' : 'bg-white/5 text-slate-500 group-hover:text-primary'}`}>
-                               <Book className="w-5 h-5" />
-                            </div>
-                            <div>
-                               <h4 className={`text-xl font-black text-white group-hover:text-primary transition-colors ${language === 'bangla' ? 'bn text-2xl' : 'italic'}`}>
-                                  {language === 'bangla' ? topic.topic?.bangla : topic.topic?.english}
-                               </h4>
-                               <p className="text-[9px] uppercase font-black tracking-widest opacity-30 italic">
-                                  {isMastered ? 'Neural Sync Complete' : 'Incomplete Synchronization'}
-                               </p>
-                            </div>
-                         </div>
-                         <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity text-primary -translate-x-4 group-hover:translate-x-0" />
-                      </Link>
-                    )
-                  })}
-                  {topics.filter(t => t.chapter?.number === parseInt(activeChapter)).length === 0 && (
-                     <div className="text-center py-20 bg-black/10 rounded-[3rem] border border-dashed border-white/5 opacity-30 flex flex-col items-center gap-6">
-                        <Activity className="w-12 h-12" />
-                        <p className="font-black italic uppercase tracking-widest text-xs">No topics identified for this Directive.</p>
-                     </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-           </AnimatePresence>
-        </div>
-
-        {/* 📊 Side Analytics & Activity Feed */}
-        <div className="space-y-10">
-           {/* Activity Feed Card */}
-           <div className="card bg-slate-900/40 rounded-[3.5rem] border border-white/5 p-10 space-y-10 overflow-hidden relative">
-              <div className="flex items-center justify-between relative z-10">
-                 <div className="flex items-center gap-4">
-                    <Activity className="w-5 h-5 text-secondary" />
-                    <h3 className="text-xl font-black italic tracking-tight text-white uppercase">Sync Activity</h3>
-                 </div>
-                 <Zap className="w-5 h-5 text-warning animate-pulse" />
+    <div className="flex flex-col gap-16 pb-32">
+      {/* 🚀 1. Student Status Header */}
+      <header className="flex flex-col xl:flex-row items-center justify-between gap-12 pt-12 pb-10 border-b border-white/5 relative">
+        <div className="flex-1 space-y-8 text-center xl:text-left">
+           <div className="flex flex-wrap items-center justify-center xl:justify-start gap-4">
+              <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+                 <span className="text-[9px] font-black uppercase tracking-[0.4em] text-primary italic">Candidate {user?.level || 1}</span>
+                 <div className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
+                 <span className="text-[9px] font-black uppercase tracking-[0.4em] text-secondary italic">Class {selectedClass} Directive</span>
               </div>
+           </div>
+           
+           <h1 className="text-6xl md:text-8xl font-black italic tracking-tighter leading-none text-white">
+              Physics <span className="text-primary gradient-text italic">Nexus.</span>
+           </h1>
+           
+           <div className="flex flex-col gap-6 pt-4">
+              <p className="text-2xl font-medium text-slate-400 italic">
+                 Welcome back, <span className="text-white">{user?.name}</span>. Select your active class:
+              </p>
+              
+              <div className="flex items-center justify-center xl:justify-start gap-6">
+                 {[9, 10].map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setSelectedClass(c)}
+                      className={`btn btn-xl px-16 h-24 rounded-[2rem] border-none transition-all duration-500 font-black italic flex-col gap-1 ${
+                        selectedClass === c 
+                          ? 'bg-primary text-primary-content shadow-[0_0_40px_rgba(99,102,241,0.4)] scale-110' 
+                          : 'bg-white/5 text-slate-500 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-[10px] uppercase tracking-[0.3em] opacity-60">Selection</span>
+                      <span className="text-3xl uppercase tracking-tighter">Class {c}</span>
+                    </button>
+                 ))}
+              </div>
+           </div>
+        </div>
 
-              <div className="space-y-6 relative z-10">
-                 {recentActivity.length > 0 ? recentActivity.map((act, idx) => (
-                    <div key={idx} className="flex gap-6 group">
-                       <div className="flex flex-col items-center">
-                          <div className={`w-3 h-3 rounded-full ${act.status === 'mastered' ? 'bg-success' : 'bg-primary'} shadow-[0_0_10px_rgba(34,197,94,0.3)]`} />
-                          {idx !== recentActivity.length - 1 && <div className="w-px h-full bg-white/5 mt-2" />}
-                       </div>
-                       <div className="pb-4">
-                          <p className="text-[9px] font-black uppercase tracking-widest opacity-30 italic mb-1">
-                            {new Date(act.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          <p className={`text-sm font-bold text-white group-hover:text-primary transition-colors ${language === 'bangla' ? 'bn text-lg' : 'italic'}`}>
-                            {language === 'bangla' ? act.topicId?.topic?.bangla : act.topicId?.topic?.english}
-                          </p>
-                          <p className="text-[10px] uppercase font-black tracking-widest text-slate-500 italic">Status: {act.status}</p>
-                       </div>
-                    </div>
-                 )) : (
-                   <div className="text-center py-10 space-y-4 opacity-30">
-                      <Clock className="w-12 h-12 mx-auto" />
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] italic">No Recent Transmissions</p>
-                   </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 w-full xl:w-auto xl:min-w-[500px]">
+           <div className="hidden lg:flex neural-card p-6 border-primary/20 bg-primary/5 flex-col justify-center gap-2 relative overflow-hidden group">
+              <div className="flex items-center justify-between relative z-10">
+                 <p className="text-[8px] font-black uppercase tracking-widest text-primary italic">Neural Consistency</p>
+                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              </div>
+              <div className="flex items-center gap-4 relative z-10">
+                 <div className={`text-2xl font-black italic tracking-tighter ${
+                    (new Date() - new Date(progress.userStats?.lastStudyDate)) / (1000 * 60 * 60) > 20 
+                    ? 'text-warning' 
+                    : 'text-white'
+                 }`}>
+                    { (new Date() - new Date(progress.userStats?.lastStudyDate)) / (1000 * 60 * 60) > 48 ? 'LINK BROKEN' : 
+                      (new Date() - new Date(progress.userStats?.lastStudyDate)) / (1000 * 60 * 60) > 20 ? 'SIGNAL WEAK' : 'SYNC ACTIVE' }
+                 </div>
+                 <div className="h-4 w-px bg-white/10" />
+                 <span className="text-xs font-black italic text-primary">0% LOSS</span>
+              </div>
+              <div className="absolute top-0 left-0 w-full h-1 bg-primary/20">
+                 <div 
+                    style={{ width: `${Math.max(0, 100 - ((new Date() - new Date(progress.userStats?.lastStudyDate)) / (1000 * 60 * 60 * 24)) * 100)}%` }}
+                    className="h-full bg-primary shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000"
+                 />
+              </div>
+           </div>
+
+           <div className="neural-card p-6 border-white/5 text-center bg-white/5">
+              <p className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-2">Study Points</p>
+              <span className="text-3xl font-black italic text-white tracking-tighter">{progress.userStats?.xp || 0}</span>
+           </div>
+           <div className="neural-card p-6 border-white/5 text-center bg-white/5">
+              <p className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-2">Study Streak</p>
+              <div className="flex items-center justify-center gap-2">
+                 <Zap className="w-4 h-4 text-warning" />
+                 <span className={`text-3xl font-black italic tracking-tighter ${ (new Date() - new Date(progress.userStats?.lastStudyDate)) / (1000 * 60 * 60) > 20 ? 'text-warning' : 'text-white' }`}>
+                    {String(progress.userStats?.streak || 0).padStart(2, '0')}D
+                 </span>
+              </div>
+           </div>
+        </div>
+      </header>
+
+      {/* 🎯 2. Current Study Goal */}
+      <section className="space-y-6">
+        <div className="flex items-center gap-4 px-6">
+           <Target className="w-5 h-5 text-primary" />
+           <h2 className="text-xs font-black uppercase tracking-[0.4em] text-white italic">Current Study Goal</h2>
+        </div>
+        <div className="neural-card bg-gradient-to-br from-primary/20 via-slate-900 to-transparent p-10 md:p-14 relative overflow-hidden group border-primary/20">
+           <div className="relative z-10 space-y-8">
+              <div className="flex items-center gap-4">
+                 <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                 <span className="text-[10px] font-black uppercase tracking-[0.5em] text-primary/60 italic">Highest Priority Lesson</span>
+              </div>
+              <div className="space-y-4">
+                 <h3 className="text-4xl md:text-6xl font-black italic tracking-tighter text-white leading-none">
+                    Resume: <span className="text-primary">{currentTopicName}.</span>
+                 </h3>
+                 <p className="text-lg text-slate-400 font-medium italic max-w-xl">
+                    {lastLesson ? 
+                       (language === 'bangla' ? 'আপনি যেখানে শেষ করেছেন সেখান থেকে আবার শুরু করুন।' : 'Pick up exactly where you left off.') :
+                       (language === 'bangla' ? 'আপনার প্রথম অধ্যায় শুরু করতে নিচের একটি বই নির্বাচন করুন।' : 'Select a chapter below to start your first lesson.')
+                    }
+                 </p>
+              </div>
+              <div className="flex items-center gap-6 pt-4">
+                 {lastLesson ? (
+                    <Link 
+                      to={`/chapter/${lastLesson.topicId?.class}/${lastLesson.topicId?.chapter?.number}`}
+                      className="btn btn-primary btn-lg rounded-2xl h-16 px-12 font-black italic uppercase tracking-widest text-xs group"
+                    >
+                      Start Studying Now
+                      <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-2 transition-transform" />
+                    </Link>
+                 ) : (
+                    <button className="btn btn-disabled btn-lg rounded-2xl h-16 px-12 font-black italic uppercase tracking-widest text-xs opacity-20">
+                       Select a Class Below to Sync Data
+                    </button>
                  )}
               </div>
-
-              <Link to="/profile" className="btn btn-ghost btn-block h-16 rounded-3xl border border-white/5 font-black italic tracking-widest text-xs uppercase group relative z-10">
-                 View Neural Profile
-                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Link>
-              
-              <div className="absolute top-[-10%] left-[-10%] w-32 h-32 bg-secondary/5 rounded-full blur-[50px] pointer-events-none" />
            </div>
-
-           {/* Stats Summary Card */}
-           <div className="card bg-gradient-to-br from-primary/20 to-secondary/20 rounded-[3.5rem] border border-white/5 p-10 space-y-8">
-              <div className="flex items-center gap-4">
-                 <TrendingUp className="w-5 h-5 text-primary" />
-                 <h3 className="text-xl font-black italic tracking-tight text-white uppercase">Live Metrics</h3>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-6">
-                 <div className="bg-black/20 p-6 rounded-[2rem] border border-white/5">
-                    <p className="text-[8px] font-black uppercase tracking-widest opacity-40 mb-2 italic">Synapse Level</p>
-                    <p className="text-3xl font-black italic text-white leading-none">{user?.level || 1}</p>
-                 </div>
-                 <div className="bg-black/20 p-6 rounded-[2rem] border border-white/5">
-                    <p className="text-[8px] font-black uppercase tracking-widest opacity-40 mb-2 italic">Neural XP</p>
-                    <p className="text-3xl font-black italic text-white leading-none">{user?.xp || 0}</p>
-                 </div>
-                 <div className="col-span-2 bg-black/20 p-6 rounded-[2rem] border border-white/5 flex items-center justify-between">
-                    <div>
-                      <p className="text-[8px] font-black uppercase tracking-widest opacity-40 mb-2 italic">Global Goal</p>
-                      <p className="text-lg font-black italic text-white uppercase">{masteredCount}/{topics.length} Mastered</p>
-                    </div>
-                    <Star className="w-8 h-8 text-warning fill-warning/20 animate-pulse" />
-                 </div>
-              </div>
-           </div>
+           <div className="absolute top-[-50%] right-[-10%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
         </div>
-      </div>
+      </section>
+
+      {/* 📚 3. Chapter Library */}
+      <section className="space-y-10">
+        <div className="flex items-center justify-between px-6">
+           <div className="flex items-center gap-4">
+              <BookOpen className="w-6 h-6 text-secondary" />
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-white italic">Physics Chapter Library</h2>
+           </div>
+           <div className="h-px flex-1 bg-white/5 mx-10" />
+           <p className="text-[10px] font-black uppercase tracking-widest opacity-20 italic">{chapters.length} Units Found</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          {chapters.length > 0 ? chapters.map((chapter) => {
+            // Safety check for progress data
+            const chapterStats = progress?.chapterStats || {};
+            const stats = chapterStats[chapter._id] || { total: chapter.topicCount, completed: 0, mastered: 0 };
+            const percent = Math.round(((stats.mastered || 0) / (chapter.topicCount || 1)) * 100);
+
+            return (
+              <motion.div 
+                key={chapter._id}
+                whileHover={{ y: -8 }}
+                className="neural-card overflow-hidden group hover:border-primary/40 transition-all duration-500 bg-slate-900/40"
+              >
+                <Link to={`/chapter/${selectedClass}/${chapter._id}`} className="p-10 flex flex-col h-full gap-8">
+                   <div className="flex items-start justify-between gap-6">
+                      <div className="space-y-4 flex-1">
+                         <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center">
+                               <Book className="w-4 h-4 text-primary" />
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary italic">Unit {String(chapter._id).padStart(2, '0')}</span>
+                         </div>
+                         <h3 className={`text-3xl md:text-4xl font-black tracking-tighter text-white leading-tight ${language === 'bangla' ? 'bn' : 'italic'}`}>
+                           {language === 'bangla' ? chapter.chapterName.bangla : chapter.chapterName.english}
+                         </h3>
+                      </div>
+                      <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-primary-content transition-all duration-500">
+                         <ChevronRight className="w-6 h-6" />
+                      </div>
+                   </div>
+
+                   <div className="flex flex-wrap gap-2 mt-auto">
+                      <span className="badge bg-white/5 border-none text-[8px] font-black uppercase tracking-widest py-3 px-4 text-slate-500">{chapter.topicCount} Lessons</span>
+                      {percent === 100 ? (
+                        <span className="badge badge-success font-black text-[8px] uppercase tracking-widest py-3 px-4 italic">Complete</span>
+                      ) : percent > 0 && (
+                        <span className="badge badge-primary font-black text-[8px] uppercase tracking-widest py-3 px-4 italic">{percent}% Sync</span>
+                      )}
+                   </div>
+
+                   <div className="pt-6 border-t border-white/5 flex items-center justify-between gap-6">
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-2">
+                           <span className="text-[8px] font-black uppercase tracking-widest opacity-20">Neural Progress</span>
+                           <span className="text-[9px] font-black text-primary italic">{percent}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                           <div style={{ width: `${percent}%` }} className="h-full bg-primary shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000" />
+                        </div>
+                      </div>
+                      <div className="btn btn-primary btn-sm rounded-xl px-6 font-black italic uppercase tracking-widest text-[8px] h-10">
+                        Open Book
+                      </div>
+                   </div>
+                </Link>
+              </motion.div>
+            );
+          }) : (
+             <div className="col-span-full py-32 bg-base-100 rounded-[4rem] border border-dashed border-white/5 flex flex-col items-center justify-center text-center gap-8 opacity-30 grayscale group">
+                <Search className="w-16 h-16 animate-bounce" />
+                <div className="space-y-2 px-8">
+                   <p className="text-2xl font-black italic uppercase tracking-tighter text-white">No Books Identified for Class {selectedClass}</p>
+                </div>
+             </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 };

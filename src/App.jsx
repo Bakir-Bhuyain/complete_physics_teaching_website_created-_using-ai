@@ -9,6 +9,9 @@ import TopicPage from './pages/TopicPage';
 import ProfilePage from './pages/ProfilePage';
 import BlogPage from './pages/BlogPage';
 import ContactPage from './pages/ContactPage';
+import ChapterPage from './pages/ChapterPage';
+import ComingSoon from './pages/ComingSoon';
+import FocusPlayer from './components/FocusPlayer';
 import { useAuth } from './context/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
@@ -74,6 +77,13 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/chapter/:classId/:chapterId" element={
+            <ProtectedRoute>
+              <Layout>
+                <ChapterPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/blog" element={
             <ProtectedRoute>
               <Layout>
@@ -88,6 +98,12 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          
+          {/* New Subjects (Coming Soon) */}
+          <Route path="/subject/chemistry" element={<ProtectedRoute><Layout><ComingSoon /></Layout></ProtectedRoute>} />
+          <Route path="/subject/biology" element={<ProtectedRoute><Layout><ComingSoon /></Layout></ProtectedRoute>} />
+          <Route path="/subject/math" element={<ProtectedRoute><Layout><ComingSoon /></Layout></ProtectedRoute>} />
+          <Route path="/subject/ict" element={<ProtectedRoute><Layout><ComingSoon /></Layout></ProtectedRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" />} />

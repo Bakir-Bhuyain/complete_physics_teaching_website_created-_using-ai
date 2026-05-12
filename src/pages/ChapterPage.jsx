@@ -16,7 +16,9 @@ import {
   X,
   Zap,
   Star,
-  AlertOctagon
+  AlertOctagon,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -24,70 +26,103 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 
-const TopicPage = () => {
-  const { id } = useParams();
+const ChapterPage = () => {
+  const { classId, chapterId } = useParams();
   const navigate = useNavigate();
   const { language } = useAuth();
-  const [topic, setTopic] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState('unstarted');
   
-  // XP & Feedback States
-  const [showXpGain, setShowXpGain] = useState(false);
-  const [leveledUp, setLeveledUp] = useState(false);
-
+  const [topics, setTopics] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  
   // UI States
   const [showAi, setShowAi] = useState(false); 
+  const [showXpGain, setShowXpGain] = useState(false);
   
   // AI States
   const [question, setQuestion] = useState('');
   const [chat, setChat] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [isSimplified, setIsSimplified] = useState(false);
   const [usage, setUsage] = useState({ remainingQueries: 5, limit: 5 });
   const chatEndRef = useRef(null);
 
+  // 🪄 Highlight Magic States
+  const [selection, setSelection] = useState({ text: '', x: 0, y: 0, visible: false });
+
+  const handleTextSelection = (e) => {
+    const selectedText = window.getSelection().toString().trim();
+    if (selectedText.length > 5) {
+      const range = window.getSelection().getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      setSelection({
+        text: selectedText,
+        x: rect.left + (rect.width / 2),
+        y: rect.top + window.scrollY - 10,
+        visible: true
+      });
+    } else {
+      setSelection(prev => ({ ...prev, visible: false }));
+    }
+  };
+
   useEffect(() => {
+    // 🛡️ Safety Guard: Don't fetch if params are missing or undefined
+    if (!classId || !chapterId || classId === 'undefined' || chapterId === 'undefined') return;
+
     const fetchData = async () => {
+      setLoading(true);
       try {
-        const [topicRes, usageRes, progRes] = await Promise.all([
-          axios.get(`/api/topics/${id}`),
-          axios.get('/api/ai/usage'),
-          axios.get('/api/progress/user')
+        const [topicsRes, usageRes] = await Promise.all([
+          axios.get(`/api/topics?class=${classId}&chapter=${chapterId}`),
+          axios.get('/api/ai/usage')
         ]);
-        setTopic(topicRes.data.topic);
+        setTopics(topicsRes.data.topics);
         setUsage(usageRes.data);
-        
-        // 🛡️ defensive check for progress list
-        if (progRes.data.progress && Array.isArray(progRes.data.progress)) {
-           const prog = progRes.data.progress.find(p => p.topicId?._id === id || p.topicId === id);
-           if (prog) setStatus(prog.status || 'unstarted');
-        }
+        setCurrentIndex(0);
+        window.scrollTo(0, 0);
       } catch (err) {
-        console.error('Error fetching topic:', err);
+        console.error('Error fetching chapter data:', err);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [id]);
+  }, [classId, chapterId]);
 
-  const updateStatus = async (newStatus) => {
-    try {
-      const res = await axios.post('/api/progress/update', {
-        topicId: id,
-        status: newStatus
-      });
-      setStatus(res.data.progress.status);
-      
-      if (res.data.xpGained > 0) {
-        setShowXpGain(true);
-        setTimeout(() => setShowXpGain(false), 3000);
+  const currentTopic = topics[currentIndex];
+
+  const handleNext = async () => {
+    // Mark current as completed before moving on
+    if (currentTopic) {
+      try {
+        const res = await axios.post('/api/progress/update', {
+          topicId: currentTopic._id,
+          status: 'mastered'
+        });
+        if (res.data.xpGained > 0) {
+          setShowXpGain(true);
+          setTimeout(() => setShowXpGain(false), 3000);
+        }
+      } catch (err) {
+        console.error('Failed to update progress', err);
       }
-      if (res.data.leveledUp) {
-        setLeveledUp(true);
-      }
-    } catch (err) {
-      console.error('Failed to update progress');
+    }
+
+    if (currentIndex < topics.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      window.scrollTo(0, 0);
+    } else {
+      // Go to next chapter
+      const nextChapterId = parseInt(chapterId) + 1;
+      navigate(`/chapter/${classId}/${nextChapterId}`);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+      window.scrollTo(0, 0);
     }
   };
 
@@ -101,9 +136,10 @@ const TopicPage = () => {
     setAiLoading(true);
 
     try {
+      const prompt = isSimplified ? `${userMsg.content} (Please explain this like I'm a 10-year old student with simple examples)` : userMsg.content;
       const res = await axios.post('/api/ai/ask', {
-        topicId: id,
-        question: userMsg.content
+        topicId: currentTopic?._id,
+        question: prompt
       });
       setChat(prev => [...prev, { role: 'ai', content: res.data.answer, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
       setUsage(prev => ({ ...prev, remainingQueries: res.data.remainingQueries }));
@@ -121,21 +157,22 @@ const TopicPage = () => {
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-8">
       <span className="loading loading-infinity text-primary loading-lg w-20"></span>
-      <p className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30 italic">Synchronizing Module Data...</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30 italic">Loading Chapter Data...</p>
     </div>
   );
 
-  // 🛡️ SAFETY CHECK: If topic data is missing, redirect or show error
-  if (!topic) return (
+  if (!topics || topics.length === 0) return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-8 text-center p-10 bg-base-100 rounded-[3rem] border border-white/5">
        <AlertOctagon className="w-20 h-20 text-error animate-bounce" />
        <div className="space-y-4">
-          <h2 className="text-4xl font-black italic tracking-tighter uppercase text-white leading-none">Data Sync Interrupted</h2>
-          <p className="text-slate-500 font-medium italic max-w-sm mx-auto">This lesson module is currently out of sync or doesn't exist in our memory banks.</p>
+          <h2 className="text-4xl font-black italic tracking-tighter uppercase text-white leading-none">Chapter Not Found</h2>
+          <p className="text-slate-500 font-medium italic max-w-sm mx-auto">You have completed all available chapters or this chapter is not yet synced.</p>
        </div>
        <button onClick={() => navigate('/dashboard')} className="btn btn-primary btn-lg rounded-3xl h-16 font-black italic uppercase tracking-widest px-10">Return to Hub</button>
     </div>
   );
+
+  const progressPercentage = Math.round(((currentIndex + 1) / topics.length) * 100);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-4 gap-12 pb-20 max-w-7xl mx-auto px-4">
@@ -158,79 +195,107 @@ const TopicPage = () => {
 
       {/* 📖 Content Column */}
       <motion.div 
+        key={currentTopic._id}
         initial={{ opacity: 0, x: -25 }}
         animate={{ opacity: 1, x: 0 }}
         className="xl:col-span-2 space-y-10"
       >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 glass p-6 md:p-8 rounded-[3.5rem] mt-[-1rem] shadow-xl border border-white/5 backdrop-blur-3xl relative">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 neural-card p-6 md:px-10 md:py-8 mt-[-1rem] relative z-20">
           <button 
             onClick={() => navigate('/dashboard')}
-            className="btn btn-ghost btn-sm md:btn-md gap-3 rounded-2xl group flex-shrink-0"
+            className="btn btn-ghost gap-3 rounded-2xl group flex-shrink-0 border border-white/5 bg-white/5 hover:bg-white/10"
           >
             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1.5 transition-transform text-primary" />
-            <span className="font-black text-[10px] uppercase tracking-widest italic font-outfit">Neural Map</span>
+            <span className="font-black text-[10px] uppercase tracking-widest italic font-outfit">Neural Hub</span>
           </button>
           
-          <div className="flex flex-col sm:flex-row items-center gap-6 w-full md:w-auto">
-             <div className="join w-full sm:w-auto bg-base-300/50 p-1 rounded-2xl border border-white/5 shadow-inner">
-                {['reading', 'completed', 'mastered'].map((s) => (
-                  <button 
-                    key={s}
-                    onClick={() => updateStatus(s)}
-                    className={`join-item btn btn-sm h-12 px-6 rounded-xl border-none transition-all duration-500 font-black italic flex-1 sm:flex-none uppercase text-[9px] tracking-widest ${
-                      status === s 
-                        ? s === 'mastered' ? 'bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20' : 'btn-primary shadow-lg' 
-                        : 'btn-ghost text-base-content/20'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
+          <div className="flex flex-col items-end gap-2 flex-1 max-w-xs">
+             <div className="flex justify-between w-full px-2">
+                <span className="text-[9px] font-black uppercase tracking-widest opacity-30 italic">Synapse Syncing...</span>
+                <span className="text-[10px] font-black text-primary italic">{progressPercentage}%</span>
+             </div>
+             <div className="w-full h-3 bg-base-300 rounded-full overflow-hidden border border-white/5 p-1 shadow-inner">
+                <div 
+                  className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(99,102,241,0.5)]" 
+                  style={{ width: `${progressPercentage}%` }}
+                />
              </div>
           </div>
         </div>
 
         <div className="card bg-slate-900/40 border border-white/5 rounded-[4rem] shadow-3xl overflow-hidden min-h-[700px]">
           <div className="card-body p-10 md:p-16">
-            <header className="mb-14 pb-8 border-b border-white/5 relative">
-              <div className="flex items-center gap-4 mb-8">
-                <Bookmark className="w-5 h-5 text-secondary" />
-                <span className="badge badge-secondary badge-outline font-black text-[9px] tracking-[.3em] uppercase py-3 px-6">Directive {topic.chapter?.number || '0'}</span>
-                {status === 'mastered' && (
-                  <div className="flex items-center gap-2 ml-auto text-emerald-500">
-                    <Star className="w-5 h-5 fill-current animate-pulse" />
-                    <span className="text-[10px] font-black uppercase tracking-widest italic">Neural Excellence</span>
-                  </div>
-                )}
+            <header className="mb-14 pb-10 border-b border-white/5 relative">
+              <div className="flex flex-wrap items-center gap-6 mb-10">
+                <div className="p-3 bg-secondary/10 rounded-2xl border border-secondary/20">
+                  <Bookmark className="w-6 h-6 text-secondary" />
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-secondary-focus italic bg-secondary/5 px-4 py-2 rounded-lg border border-secondary/10">Chapter {chapterId}</span>
+                  <div className="h-1 w-8 bg-white/5" />
+                  <span className="text-[10px] font-black text-primary tracking-widest uppercase italic border-l border-white/10 pl-4">Lesson {currentIndex + 1} of {topics.length}</span>
+                </div>
               </div>
               
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-0.5 w-8 bg-primary rounded-full" />
-                  <p className="text-primary text-xs font-black uppercase tracking-[0.5em] italic">CHAPTER {topic.chapter?.number || '0'}</p>
-                </div>
-                <h1 className={`text-6xl md:text-8xl font-black italic tracking-tighter leading-[0.9] text-white ${language === 'bangla' ? 'bn text-5xl not-italic leading-tight' : ''}`}>
-                  {language === 'bangla' ? topic.topic?.bangla : topic.topic?.english}
+              <div className="space-y-6">
+                <h1 className={`text-6xl md:text-8xl font-black italic tracking-tighter leading-[0.9] text-white ${language === 'bangla' ? 'bn text-6xl not-italic leading-tight' : ''}`}>
+                  {language === 'bangla' ? currentTopic.topic?.bangla : currentTopic.topic?.english}
                 </h1>
+                <div className="h-2 w-32 bg-primary/20 rounded-full" />
               </div>
             </header>
 
-            <article className={`prose prose-invert max-w-none text-xl md:text-2xl text-slate-400 leading-relaxed font-medium space-y-6 ${language === 'bangla' ? 'bn leading-loose' : 'italic'}`}>
+            <article 
+              onMouseUp={handleTextSelection}
+              onKeyUp={handleTextSelection}
+              className={`relative prose prose-invert max-w-none text-xl md:text-2xl text-slate-400 leading-relaxed font-medium space-y-6 ${language === 'bangla' ? 'bn leading-loose' : 'italic'}`}
+            >
               <ReactMarkdown
                 remarkPlugins={[remarkMath, remarkGfm]}
                 rehypePlugins={[rehypeKatex]}
                 className="whitespace-pre-wrap"
               >
-                {language === 'bangla' ? topic.content?.bangla : topic.content?.english}
+                {language === 'bangla' ? currentTopic.content?.bangla : currentTopic.content?.english}
               </ReactMarkdown>
+
+              {/* 🪄 Highlight Magic Tooltip */}
+              <AnimatePresence>
+                {selection.visible && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                    style={{ 
+                      position: 'absolute', 
+                      left: selection.x, 
+                      top: selection.y, 
+                      transform: 'translateX(-50%) translateY(-100%)',
+                      zIndex: 100 
+                    }}
+                    className="pointer-events-auto"
+                  >
+                    <button 
+                      onClick={() => {
+                        setQuestion(`Can you explain this specific part: "${selection.text}"?`);
+                        setShowAi(true);
+                        setSelection(prev => ({ ...prev, visible: false }));
+                      }}
+                      className="btn btn-primary btn-sm rounded-full shadow-2xl shadow-primary/40 gap-2 h-10 px-4 border-none group"
+                    >
+                      <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                      <span className="text-[9px] font-black uppercase tracking-widest italic">Ask Neural AI</span>
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </article>
 
-            {topic.formulas && topic.formulas.length > 0 && (
+            {currentTopic.formulas && currentTopic.formulas.length > 0 && (
               <div className="divider opacity-5 mt-24 mb-14 uppercase font-black text-[10px] tracking-[0.5em]">Laws of Physics</div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              {topic.formulas?.map((f, idx) => (
+              {currentTopic.formulas?.map((f, idx) => (
                 <div key={idx} className="card bg-black/20 hover:bg-black/40 hover:scale-[1.03] border border-white/5 rounded-[3rem] transition-all duration-700 overflow-hidden group">
                   <div className="card-body p-8 md:p-12">
                     <div className="flex items-center gap-4 mb-6">
@@ -254,18 +319,38 @@ const TopicPage = () => {
                 </div>
               ))}
             </div>
+            
+            {/* Pagination Controls */}
+            <div className="mt-20 pt-10 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-6">
+              <button 
+                onClick={handlePrev}
+                disabled={currentIndex === 0}
+                className="btn btn-ghost rounded-3xl h-16 px-8 font-black uppercase tracking-widest text-xs disabled:opacity-20"
+              >
+                <ChevronLeft className="w-5 h-5 mr-2" />
+                Previous Topic
+              </button>
+              
+              <button 
+                onClick={handleNext}
+                className="btn btn-primary rounded-3xl h-16 px-10 font-black uppercase tracking-widest text-xs shadow-2xl shadow-primary/30"
+              >
+                {currentIndex < topics.length - 1 ? 'Next Topic' : 'Next Chapter'}
+                <ChevronRight className="w-5 h-5 ml-2" />
+              </button>
+            </div>
+
           </div>
         </div>
       </motion.div>
 
-      {/* 🤖 AI Tutor Sidebar (With Mobile Bottom Toggle) */}
+      {/* 🤖 AI Tutor Sidebar */}
       <motion.aside 
         initial={{ opacity: 0, x: 25 }}
         animate={{ opacity: 1, x: 0 }}
         className={`xl:col-span-2 fixed inset-x-0 bottom-0 z-[60] xl:static xl:z-auto bg-slate-950 xl:bg-transparent transition-transform duration-500 xl:translate-y-0 ${showAi ? 'translate-y-0' : 'translate-y-[calc(100%-80px)] xl:translate-y-0'}`}
       >
         <div className="card bg-slate-900 shadow-3xl xl:bg-slate-900/40 border border-white/5 rounded-t-[4rem] xl:rounded-[4.5rem] flex flex-col h-[850px] xl:h-[850px] sticky top-24 overflow-hidden backdrop-blur-3xl">
-          {/* AI Header / Mobile Toggle */}
           <div 
             onClick={() => setShowAi(!showAi)}
             className="p-8 border-b border-white/5 flex items-center justify-between cursor-pointer xl:cursor-default bg-black/20"
@@ -295,7 +380,6 @@ const TopicPage = () => {
             </div>
           </div>
 
-          {/* AI Messages Area */}
           <div className="flex-1 overflow-y-auto p-10 space-y-8 scrollbar-hide">
             <AnimatePresence initial={false}>
               {chat.length === 0 && !aiLoading && (
@@ -317,12 +401,12 @@ const TopicPage = () => {
                   <div className="chat-header opacity-20 mb-2 font-black uppercase text-[8px] tracking-[0.2em]">
                     {msg.role === 'user' ? 'Direct Prompt' : 'Resolution'}
                   </div>
-                  <div className={`chat-bubble shadow-3xl text-[16px] leading-[1.6] py-5 px-8 rounded-[2.5rem] border border-white/5 ${
+                  <div className={`chat-bubble shadow-3xl text-[16px] leading-[1.7] py-6 px-8 rounded-[2.5rem] border border-white/5 ${
                     msg.role === 'user' 
-                      ? 'bg-primary text-primary-content font-bold italic' 
+                      ? 'bg-primary text-primary-content font-black italic' 
                       : msg.role === 'error'
                       ? 'bg-error/10 text-error font-black border-error/20'
-                      : 'bg-black/40 text-slate-300 glass'
+                      : 'bg-white/5 text-slate-300 backdrop-blur-xl'
                   }`}>
                     <div className={`${msg.role !== 'user' ? 'bn text-xl leading-loose font-medium italic' : ''} whitespace-pre-wrap`}>
                       {msg.content}
@@ -342,8 +426,19 @@ const TopicPage = () => {
             <div ref={chatEndRef} />
           </div>
 
-          {/* AI Input Area */}
-          <div className="p-10 pt-6 bg-black/40">
+          <div className="p-10 pt-6 bg-black/40 space-y-4">
+            <div className="flex items-center justify-between px-2">
+               <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${isSimplified ? 'bg-success animate-pulse' : 'bg-white/10'}`} />
+                  <span className="text-[8px] font-black uppercase tracking-[0.4em] opacity-30 italic">Simplify Logic</span>
+               </div>
+               <input 
+                 type="checkbox" 
+                 className="toggle toggle-primary toggle-sm border-white/10 bg-white/5" 
+                 checked={isSimplified}
+                 onChange={() => setIsSimplified(!isSimplified)}
+               />
+            </div>
             <form onSubmit={handleAskAI} className="relative group">
               <input 
                 value={question}
@@ -367,4 +462,4 @@ const TopicPage = () => {
   );
 };
 
-export default TopicPage;
+export default ChapterPage;

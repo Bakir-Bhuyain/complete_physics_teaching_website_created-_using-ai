@@ -23,7 +23,7 @@ const RegisterPage = () => {
       login(res.data.user, res.data.token);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed. Check your data.');
+      setError(err.response?.data?.error || err.message || 'Registration failed. Check your data.');
     } finally {
       setLoading(false);
     }
